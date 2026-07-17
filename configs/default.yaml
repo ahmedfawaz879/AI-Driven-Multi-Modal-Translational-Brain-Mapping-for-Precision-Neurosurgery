@@ -1,0 +1,33 @@
+# Default model/training configuration.
+#
+# Mirrors the dataclass field defaults in src/brain_mapping/config.py
+# (ModelConfig, TrainingConfig). Pass this file to the CLI with
+# `--config configs/default.yaml`; individual CLI flags (e.g. --epochs,
+# --lr, --base_filters) override the corresponding value loaded here.
+#
+# These are the same numeric defaults the original single-file script
+# hardcoded in its dataclasses - externalizing them here does not change
+# any behavior, it just makes them editable without touching source.
+
+model:
+  in_channels: 3       # T1, T2, FLAIR
+  out_channels: 2       # background, tumor
+  base_filters: 32
+  depth: 4               # NOTE: not currently wired into EnhancedUNet3D,
+                          # which always builds 4 encoder/decoder stages
+                          # regardless of this value (pre-existing
+                          # behavior carried over from the original
+                          # script, see models.py docstring).
+  use_attention: true
+  use_residual: true
+  dropout: 0.1
+
+training:
+  epochs: 50
+  batch_size: 2
+  learning_rate: 0.0001
+  weight_decay: 0.00001
+  patience: 10
+  use_amp: true
+  accumulation_steps: 4
+  val_split: 0.2
