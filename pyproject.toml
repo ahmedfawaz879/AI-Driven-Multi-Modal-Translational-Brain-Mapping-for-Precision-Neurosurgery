@@ -1,0 +1,69 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "brain-mapping"
+version = "0.1.0"
+description = "Multi-modal (T1/T2/FLAIR) brain tumor segmentation with a 3D attention U-Net, Monte Carlo uncertainty estimation, Layer-CAM/Integrated Gradients/SHAP explainability, and functional connectivity analysis."
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.9"
+authors = [
+    {name = "Ahmed Fawaz", email = "ahmedfawaz879@users.noreply.github.com"},
+]
+keywords = ["brain-mri", "tumor-segmentation", "unet", "explainable-ai", "uncertainty-quantification", "neurosurgery", "pytorch", "connectivity"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+]
+dependencies = [
+    "numpy==2.3.4",
+    "nibabel==5.3.2",
+    "matplotlib==3.10.7",
+    "plotly==6.4.0",
+    "tqdm==4.67.1",
+    "torch==2.9.0",
+    "nilearn==0.12.1",
+    "scipy==1.15.2",
+    "scikit-learn==1.7.2",
+    "networkx==3.4.2",
+    "pyyaml==6.0.3",
+]
+
+[project.optional-dependencies]
+xai = [
+    "shap==0.45.0",
+    "monai==1.3.1",
+]
+dev = [
+    "pytest==9.0.0",
+    "pytest-cov==7.1.0",
+]
+all = [
+    "brain-mapping[xai,dev]",
+]
+
+[project.scripts]
+brain-mapping-train = "brain_mapping.cli:main"
+brain-mapping-infer = "brain_mapping.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/ahmedfawaz879/AI-Driven-Multi-Modal-Translational-Brain-Mapping-for-Precision-Neurosurgery"
+Repository = "https://github.com/ahmedfawaz879/AI-Driven-Multi-Modal-Translational-Brain-Mapping-for-Precision-Neurosurgery"
+Issues = "https://github.com/ahmedfawaz879/AI-Driven-Multi-Modal-Translational-Brain-Mapping-for-Precision-Neurosurgery/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

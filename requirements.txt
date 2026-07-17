@@ -1,0 +1,17 @@
+# Core, required dependencies - exactly pinned for reproducibility.
+# Install with: pip install -r requirements.txt
+#
+# For optional extras (SHAP, MONAI) see requirements-optional.txt.
+# For development/testing tools, use `pip install -e ".[dev]"` (see pyproject.toml).
+
+numpy==2.3.4
+nibabel==5.3.2
+matplotlib==3.10.7
+plotly==6.4.0
+tqdm==4.67.1
+torch==2.9.0
+nilearn==0.12.1
+scipy==1.15.2
+scikit-learn==1.7.2
+networkx==3.4.2
+pyyaml==6.0.3

@@ -1,0 +1,25 @@
+# Optional dependencies: shap and monai.
+#
+# Neither is a hard requirement to run this package - the model, training
+# loop, Layer-CAM, and Integrated Gradients explainability all work with
+# only requirements.txt installed.
+#
+# Note on current status: the original single-file script imported both
+# under try/except guards (SHAP_AVAILABLE / MONAI_AVAILABLE flags) but
+# never actually called shap.* or monai.* anywhere - those flags were set
+# and never read again, and MONAI's DiceCELoss/FocalLoss/DiceMetric were
+# imported but unused (CombinedLoss in models.py implements its own
+# dice/focal loss). That dead code was not carried forward into this
+# refactor. This file is kept so the two libraries are readily
+# installable for anyone who wants to extend explain.py with real SHAP
+# attribution or models.py with MONAI's loss/metric implementations.
+#
+# Install with: pip install -r requirements-optional.txt
+#
+# These two pins were not installed/verified in the environment used to
+# build this repo (they are large and not required for the core pipeline
+# or test suite to pass) - version-compatibility with the core pins above
+# is not guaranteed and should be checked when actually installing them.
+
+shap==0.45.0
+monai==1.3.1
