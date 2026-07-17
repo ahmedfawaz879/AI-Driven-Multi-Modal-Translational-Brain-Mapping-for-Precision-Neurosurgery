@@ -4,7 +4,7 @@
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-red.svg)](https://pytorch.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A state-of-the-art **deep learning pipeline** for translational brain mapping that combines multi-modal neuroimaging with explainable AI to support precision neurosurgery planning. This framework integrates structural MRI, functional connectivity, and advanced XAI methods to generate comprehensive, interpretable brain tumor analysis.
+A **deep learning pipeline** for translational brain mapping that combines multi-modal neuroimaging with explainable AI to support precision neurosurgery planning. This framework integrates structural MRI, functional connectivity, and advanced XAI methods to generate comprehensive, interpretable brain tumor analysis.
 
 ##  Overview
 
@@ -79,7 +79,7 @@ This repository implements a complete end-to-end pipeline featuring:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/brain-mapping.git
+git clone https://github.com/ahmedfawaz879/AI-Driven-Multi-Modal-Translational-Brain-Mapping-for-Precision-Neurosurgery.git
 cd brain-mapping
 
 # Create virtual environment
