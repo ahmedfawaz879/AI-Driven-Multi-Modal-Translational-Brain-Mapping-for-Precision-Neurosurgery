@@ -1,300 +1,128 @@
-#  AI-Driven Multi-Modal Translational Brain Mapping for Precision Neurosurgery
+# AI-Driven Multi-Modal Translational Brain Mapping for Precision Neurosurgery
 
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-red.svg)](https://pytorch.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+A PyTorch pipeline for multi-modal (T1/T2/FLAIR) brain tumor segmentation with a 3D attention U-Net, Monte Carlo uncertainty estimation, voxel-level explainability (Layer-CAM, Integrated Gradients), and resting-state functional connectivity analysis - built as a template for the kind of tooling that would sit upstream of precision neurosurgery planning.
 
-A **deep learning pipeline** for translational brain mapping that combines multi-modal neuroimaging with explainable AI to support precision neurosurgery planning. This framework integrates structural MRI, functional connectivity, and advanced XAI methods to generate comprehensive, interpretable brain tumor analysis.
+**Status: implementation only.** This code has not been trained or evaluated on real neuroimaging data. There are no benchmark results in this README, and none should be assumed. See [Results](#results) and [Limitations](#limitations).
 
-##  Overview
+## Why this exists
 
-This repository implements a complete end-to-end pipeline featuring:
+Neurosurgical planning for tumor resection has to balance two things that are in tension: removing as much tumor as possible, and preserving eloquent brain tissue and its functional connections. A model that only outputs a segmentation mask doesn't help with that trade-off - a surgeon also needs to know *how confident* the model is in a given region, *which* anatomical/functional structures the tumor overlaps, and *why* the model drew the boundary it did. That's the motivation for combining segmentation with uncertainty quantification, voxel-level attribution, and connectivity analysis in one pipeline rather than treating them as separate tools.
 
-- **Advanced 3D U-Net architecture** with attention mechanisms and residual connections
-- **Multi-modal MRI fusion** (T1, T2, FLAIR) for robust tumor segmentation
-- **Uncertainty quantification** via Monte Carlo Dropout for prediction confidence
-- **Functional connectivity analysis** from resting-state fMRI
-- **State-of-the-art XAI methods**: Layer-CAM, Integrated Gradients, SHAP
-- **Clinical report generation** with tumor characterization and affected brain regions
-- **Production-ready training** with mixed precision, gradient accumulation, and early stopping
+This repository is a from-scratch implementation of that combination. It is a portfolio/engineering artifact demonstrating the pipeline design, not a validated clinical tool, and it must not be used for any real clinical decision-making.
 
-##  Key Features
+## Method
 
-###  **Advanced Architecture**
-- **Enhanced 3D U-Net** with attention blocks for improved feature extraction
-- **Residual connections** throughout encoder-decoder for better gradient flow
-- **Multi-scale feature fusion** with skip connections
-- **Instance normalization** for stable training across diverse MRI protocols
+- **Segmentation**: a 3D U-Net (`EnhancedUNet3D`) with residual encoder/decoder blocks and self-attention blocks (`AttentionBlock3D`) at each stage, trained with a combined Cross-Entropy + Dice + Focal loss (`CombinedLoss`).
+- **Uncertainty**: Monte Carlo Dropout (`UncertaintyEstimator`) - N stochastic forward passes at inference time with dropout left active, giving a per-voxel mean prediction and standard deviation (epistemic uncertainty proxy). This is a common, cheap approximation, not a calibrated confidence estimate - see [Limitations](#limitations).
+- **Explainability**: Layer-CAM (`LayerCAM3D`) and Integrated Gradients (`integrated_gradients`) both run today and produce voxel-level attribution maps. SHAP is listed as an optional dependency and guarded with an `try/except` import, but **no SHAP-based explanation is actually wired into the inference pipeline** - installing `shap` alone does not add SHAP output. See [Limitations](#limitations).
+- **Functional connectivity**: `ConnectivityAnalyzer` extracts ROI time series from a 4D resting-state fMRI volume via an atlas (`nilearn.input_data.NiftiLabelsMasker`), computes a correlation (or partial-correlation via `GraphicalLassoCV`) connectivity matrix, and derives graph-theory metrics (degree, betweenness, clustering) with `networkx` when it's installed.
+- **Clinical report**: `ClinicalReportGenerator` renders tumor volume, uncertainty statistics, and the top-10 tumor-overlapping ROIs (by numeric atlas label) into a plain-text report. See the example below.
 
-###  **Sophisticated Training Pipeline**
-- **Mixed precision training (AMP)** - 2x faster with lower memory footprint
-- **Gradient accumulation** - train with effectively larger batch sizes
-- **Combined loss function** - Cross-Entropy + Dice + Focal Loss
-- **Smart early stopping** with validation monitoring
-- **Learning rate scheduling** with ReduceLROnPlateau
-- **K-fold cross-validation** support
+## Dataset
 
-###  **Advanced Data Processing**
-- **Multiple normalization methods**: Z-score, Percentile clipping, Nyúl standardization
-- **Rich 3D augmentation**: Random flips, rotations, scaling, noise injection, gamma correction
-- **Robust preprocessing** with automatic error handling and logging
-- **Multi-modal registration** support
+This pipeline expects data in the [BraTS](https://www.synapse.org/brats) (Brain Tumor Segmentation Challenge) format - co-registered, skull-stripped T1/T2/FLAIR MRI volumes plus an expert segmentation mask. **BraTS data requires registration at https://www.synapse.org/brats and is not redistributed here; no data is bundled with this repository.**
 
-###  **Explainable AI (XAI)**
-- **Layer-CAM** - More accurate than traditional Grad-CAM for 3D medical images
-- **Integrated Gradients** - Voxel-level attribution with path integration
-- **SHAP analysis** - Shapley-based feature importance (optional)
-- **Uncertainty maps** - Epistemic uncertainty via Monte Carlo Dropout
-- **Multi-method comparison** - Side-by-side XAI visualization
-
-###  **Clinical Integration**
-- **Automated tumor volume estimation** with proper voxel spacing
-- **Affected ROI ranking** with overlap percentages
-- **Functional connectivity impact** assessment
-- **Structured clinical reports** in human-readable format
-- **Publication-quality visualizations** (PNG, PDF, interactive HTML)
-
-###  **Functional Connectivity**
-- **ROI time-series extraction** using brain atlases (AAL, Harvard-Oxford, etc.)
-- **Correlation and partial correlation** connectivity matrices
-- **Graph theory metrics**: Degree centrality, betweenness, clustering coefficient
-- **Tumor-connectivity fusion** to assess network disruption
-- **3D network visualization** with affected connections
-
-###  **Visualization & Reporting**
-- **Multi-panel figures** showing axial, coronal, sagittal views
-- **XAI overlay comparisons** across different methods
-- **Uncertainty heatmaps** for prediction confidence
-- **Interactive 3D plots** with Plotly for tumor and ROI exploration
-- **Training curve analysis** with loss and metric tracking
-
-##  Installation
-
-### Prerequisites
-- Python 3.8 or higher
-- CUDA-capable GPU (recommended, 8GB+ VRAM)
-- 16GB+ RAM
-
-### Quick Install
-
-```bash
-# Clone the repository
-git clone https://github.com/ahmedfawaz879/AI-Driven-Multi-Modal-Translational-Brain-Mapping-for-Precision-Neurosurgery.git
-cd brain-mapping
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-```
-
-### Requirements File (`requirements.txt`)
-
-```txt
-# Core dependencies
-torch>=2.0.0
-torchvision>=0.15.0
-numpy>=1.24.0
-scipy>=1.10.0
-
-# Medical imaging
-nibabel>=5.0.0
-nilearn>=0.10.0
-
-# Visualization
-matplotlib>=3.7.0
-plotly>=5.14.0
-kaleido>=0.2.1
-
-# Machine learning utilities
-scikit-learn>=1.2.0
-scikit-image>=0.20.0
-tqdm>=4.65.0
-
-# Optional: Advanced features
-shap>=0.41.0  # For SHAP analysis
-monai>=1.1.0  # For additional losses and metrics
-networkx>=3.0  # For graph theory metrics
-
-# Development
-pytest>=7.2.0
-black>=23.0.0
-```
-
-### Optional Dependencies
-
-For full functionality:
-
-```bash
-# For MONAI integration (advanced losses)
-pip install monai
-
-# For graph theory metrics
-pip install networkx
-
-# For SHAP explanations
-pip install shap
-
-# For development
-pip install pytest black flake8
-```
-
-##  Dataset Structure
-
-Organize your data as follows:
+Expected directory layout:
 
 ```
 data/
 ├── patient_001/
-│   ├── T1.nii.gz          # T1-weighted MRI
-│   ├── T2.nii.gz          # T2-weighted MRI
-│   ├── FLAIR.nii.gz       # FLAIR sequence
-│   ├── fmri.nii.gz        # Resting-state fMRI (optional)
-│   └── mask.nii.gz        # Ground truth segmentation (optional, for training)
-├── patient_002/
-│   └── ...
-└── patient_N/
+│   ├── T1.nii.gz          # T1-weighted MRI (required)
+│   ├── T2.nii.gz          # T2-weighted MRI (optional, improves segmentation)
+│   ├── FLAIR.nii.gz       # FLAIR sequence (optional, improves segmentation)
+│   ├── fmri.nii.gz        # resting-state fMRI, 4D (optional, enables connectivity analysis)
+│   └── mask.nii.gz        # ground-truth segmentation (optional, required only for training)
+└── patient_002/
     └── ...
 
 atlases/
-├── AAL.nii.gz             # Automated Anatomical Labeling atlas
-├── HarvardOxford.nii.gz   # Harvard-Oxford atlas
-└── custom_atlas.nii.gz    # Your custom atlas
+└── atlas.nii.gz            # integer-labeled ROI atlas (e.g. AAL, Harvard-Oxford) for connectivity analysis
 ```
 
-### Data Requirements
+Any modality file that's missing is silently replaced with zeros by `EnhancedBrainDataset` and a warning is logged - the pipeline will run, but segmentation quality on a case missing T2/FLAIR is untested and likely to be poor.
 
-- **MRI Volumes**: NIfTI format (.nii or .nii.gz)
-- **Required modalities**: At least T1-weighted images
-- **Optional modalities**: T2, FLAIR improve segmentation accuracy
-- **fMRI**: 4D volume for connectivity analysis (optional)
-- **Masks**: Binary segmentation for training (0=background, 1=tumor)
-- **Atlas**: 3D volume with integer labels for ROI analysis
+## Installation
 
-##  Usage
-
-### Basic Training
-
-Train a model from scratch:
+Requires Python 3.9+.
 
 ```bash
-python main.py \
+git clone https://github.com/ahmedfawaz879/AI-Driven-Multi-Modal-Translational-Brain-Mapping-for-Precision-Neurosurgery.git
+cd AI-Driven-Multi-Modal-Translational-Brain-Mapping-for-Precision-Neurosurgery
+pip install -e ".[dev]"
+```
+
+This installs the exact pins in `requirements.txt` (declared as `dependencies` in `pyproject.toml`) plus `pytest`. Two optional extras are available and are **not** required for the core pipeline to run:
+
+```bash
+pip install -e ".[xai]"   # shap, monai - see Limitations for what these do (and don't) enable today
+pip install -r requirements-optional.txt   # equivalent, without editable install
+```
+
+Verify the install:
+
+```bash
+pytest tests/ -v
+brain-mapping-train --help
+```
+
+## Usage
+
+The CLI (`src/brain_mapping/cli.py`) is installed as two console-script aliases, `brain-mapping-train` and `brain-mapping-infer`, that both point at the same `main()` entry point - which of `--train` / `--infer` you pass decides what actually runs (this mirrors the original script's single-entrypoint, flag-driven design). You can also invoke it without installing, via `python -m brain_mapping.cli`.
+
+### Train
+
+```bash
+brain-mapping-train \
   --data_dir data \
-  --atlas atlases/AAL.nii.gz \
+  --atlas atlases/atlas.nii.gz \
   --train \
+  --config configs/default.yaml \
   --epochs 50 \
-  --batch_size 2 \
-  --lr 1e-4 \
-  --base_filters 32 \
-  --use_attention \
-  --device cuda
-```
-
-### Training with Advanced Options
-
-```bash
-python main.py \
-  --data_dir data \
-  --atlas atlases/AAL.nii.gz \
-  --train \
-  --epochs 100 \
-  --batch_size 2 \
-  --lr 1e-4 \
-  --val_split 0.2 \
-  --base_filters 32 \
-  --use_attention \
-  --dropout 0.1 \
   --model_path checkpoints/best_model.pth \
-  --save_dir results \
   --device cuda
 ```
 
-### Inference on New Cases
-
-Run prediction with uncertainty estimation:
+### Run inference (segmentation + uncertainty + XAI + connectivity + report) on one case
 
 ```bash
-python main.py \
+brain-mapping-infer \
   --data_dir data \
-  --atlas atlases/AAL.nii.gz \
-  --infer \
-  --uncertainty \
+  --atlas atlases/atlas.nii.gz \
+  --infer --xai --uncertainty \
   --case_idx 0 \
   --model_path checkpoints/best_model.pth \
-  --save_dir results \
+  --save_dir results/case_000 \
   --device cuda
 ```
 
-### Full Pipeline with XAI
+`--seed` (default `42`) controls a `set_seed()` call made at CLI startup that seeds `random`, `numpy`, and `torch`/`torch.cuda` - the original script had no seed control at all, so runs were not reproducible.
 
-Generate complete analysis with all XAI methods:
+Run `brain-mapping-train --help` / `brain-mapping-infer --help` for the full flag list.
 
-```bash
-python main.py \
-  --data_dir data \
-  --atlas atlases/AAL.nii.gz \
-  --infer \
-  --xai \
-  --uncertainty \
-  --case_idx 0 \
-  --model_path checkpoints/best_model.pth \
-  --save_dir results/case_001 \
-  --device cuda
-```
-
-### Batch Processing
-
-Process multiple cases:
-
-```bash
-# Create a case list file
-echo "data/patient_001" > cases.txt
-echo "data/patient_002" >> cases.txt
-echo "data/patient_003" >> cases.txt
-
-# Process all cases
-for idx in {0..2}; do
-  python main.py \
-    --case_list cases.txt \
-    --atlas atlases/AAL.nii.gz \
-    --infer --xai --uncertainty \
-    --case_idx $idx \
-    --model_path checkpoints/best_model.pth \
-    --save_dir results/batch_analysis \
-    --device cuda
-done
-```
-
-##  Output Files
-
-After running the pipeline, you'll find:
+### Output files
 
 ```
-results/
-├── case_001/
-│   ├── patient_001_tumor_prob.nii.gz       # Tumor probability map
-│   ├── patient_001_uncertainty.nii.gz      # Uncertainty map
-│   ├── patient_001_analysis.png            # Multi-panel visualization
-│   ├── patient_001_analysis.pdf            # Publication-ready PDF
-│   ├── patient_001_xai_gradcam.png         # Grad-CAM visualization
-│   ├── patient_001_xai_ig.png              # Integrated Gradients
-│   ├── patient_001_xai_shap.png            # SHAP visualization (if available)
-│   └── patient_001_report.txt              # Clinical report
-├── training_curves.png                      # Training history
-└── best_model.pth                           # Trained model checkpoint
+results/case_000/
+├── patient_001_tumor_prob.nii.gz     # tumor probability map (NIfTI)
+├── patient_001_uncertainty.nii.gz    # MC-Dropout uncertainty map (NIfTI)
+├── patient_001_analysis.png          # multi-panel axial/coronal/sagittal figure
+├── patient_001_analysis.pdf          # same figure, publication-quality PDF
+└── patient_001_report.txt            # clinical text report (see example below)
 ```
 
-### Clinical Report Example
+## Example output - illustrative, not real results
+
+The block below shows the **exact text format** `ClinicalReportGenerator.generate_report()` actually produces today, with placeholder numbers standing in for a real inference run. It is not the output of a real model run on real data, and none of the code in this repository has ever been trained on patient data.
+
+Note in particular that affected regions are listed by **numeric atlas ROI id only** (e.g. `ROI  45`). There is no atlas-label-to-anatomical-name lookup implemented anywhere in this codebase, so the report cannot currently print a region name like "Left Temporal Lobe" - resolving ROI ids to names is left to the user, against whichever atlas they supplied.
 
 ```
 ╔══════════════════════════════════════════════════════════════╗
-║                Brain Tumor Analysis Report                   ║
+║          AI-Driven Brain Tumor Analysis Report               ║
 ╚══════════════════════════════════════════════════════════════╝
 
 Case ID: patient_001
-Analysis Date: 2025-01-15
+Analysis Date: 2026-07-17
 
 ─────────────────────────────────────────────────────────────
 
@@ -307,181 +135,87 @@ TUMOR CHARACTERISTICS:
 ─────────────────────────────────────────────────────────────
 
 AFFECTED BRAIN REGIONS (Top 10):
-   1. ROI  45:  87.3% overlap  (Left Temporal Lobe)
-   2. ROI  46:  82.1% overlap  (Left Hippocampus)
-   3. ROI  47:  65.4% overlap  (Left Parahippocampal)
-   ...
+   1. ROI  45:  87.3% overlap
+   2. ROI  46:  82.1% overlap
+   3. ROI  47:  65.4% overlap
 
 ─────────────────────────────────────────────────────────────
 
 FUNCTIONAL CONNECTIVITY IMPACT:
   • ROI 45: 0.82 disruption score
   • ROI 46: 0.76 disruption score
-  ...
+
+─────────────────────────────────────────────────────────────
+
+INTERPRETATION NOTES:
+  • High uncertainty regions require additional clinical review
+  • Affected ROIs indicate potential functional impact zones
+  • Connectivity analysis shows network-level implications
+
+─────────────────────────────────────────────────────────────
 ```
 
-##  XAI Methods Explained
+(The original version of this README showed this same example with invented region names like "Left Temporal Lobe" and "Left Hippocampus" appended to the ROI lines. The code has never been able to produce those names; that example has been corrected here.)
 
-### Layer-CAM (Recommended)
-- **What**: Gradient-weighted class activation mapping at layer level
-- **Advantage**: More accurate localization than standard Grad-CAM
-- **Use case**: Identify which brain regions the model focuses on for tumor detection
+## Results
 
-### Integrated Gradients
-- **What**: Attribution method that computes the integral of gradients along a path
-- **Advantage**: Satisfies sensitivity and implementation invariance
-- **Use case**: Understand voxel-level contributions to the prediction
+Implementation only; not yet evaluated on benchmark data. No Dice, IoU, Hausdorff distance, sensitivity/specificity, uncertainty-calibration, or any other performance numbers exist for this pipeline, and none are claimed here. `Trainer.validate()` does compute a running Dice score during training as a training-time monitoring signal, but no training run has been performed and no resulting number is reported anywhere in this repository.
 
-### SHAP (Shapley Additive Explanations)
-- **What**: Game-theory based feature attribution
-- **Advantage**: Theoretically grounded with additive property
-- **Use case**: Comprehensive feature importance with local and global interpretability
-- **Note**: Computationally expensive, requires background samples
+## Limitations
 
-### Uncertainty Quantification
-- **Method**: Monte Carlo Dropout (20 forward passes)
-- **Output**: Mean prediction + standard deviation
-- **Interpretation**: High uncertainty suggests the model is unsure, requiring manual review
+- **Never trained or evaluated on real data.** No BraTS run, no checkpoint, no benchmark numbers. Everything above is a description of what the code does, not what it has achieved.
+- **ROI reporting is numeric-id-only.** `ClinicalReportGenerator` has no atlas-label-to-anatomical-name lookup; region identity must be resolved manually against whichever atlas was supplied.
+- **Uncertainty estimates are uncalibrated and unvalidated.** MC-Dropout standard deviation is a common cheap proxy for epistemic uncertainty, but it has not been validated against expert disagreement or any ground truth on this task - treat it as a relative signal at best, not a calibrated probability.
+- **SHAP is not actually wired up.** It's listed as an optional dependency and guarded with a `try/except ImportError`, but no code path calls it. For 3D medical volumes, SHAP is also compute-heavy (background-sample-based methods scale poorly with voxel count) and would need real engineering work, not just an `import shap`, before it produces anything.
+- **`ModelConfig.depth` is not wired up.** `EnhancedUNet3D` always builds 4 encoder/decoder stages; the `depth` field exists in the config but changing it currently has no effect. Carried over unchanged from the original script.
+- **`base_filters` has a practical floor of 8 when `use_attention=True`.** `AttentionBlock3D` projects `channels -> channels // 8` for its query/key convolutions; any encoder stage with fewer than 8 channels collapses that projection to 0 output channels and crashes the forward pass. This is a pre-existing constraint in the original script's attention mechanism, not something introduced here - it only surfaced during this refactor's test-writing (see `tests/test_models.py`), because the original script was never actually run with a small `base_filters` value.
+- **A few imports in the original script were dead code** and were not carried into this refactor: `plotly.graph_objects` (imported, no interactive plot was ever generated) and `sklearn.model_selection.KFold` (imported, no cross-validation loop existed). `plotly` remains a pinned dependency since the module map from the original audit called for it; it is presently unused by any code path.
+- **fMRI/connectivity path is unexercised.** `ConnectivityAnalyzer` has not been run against real resting-state data as part of this refactor.
+- **No CI pipeline** runs these tests automatically on push; `pytest` was run locally (see below) but there is no GitHub Actions workflow yet.
 
-##  Architecture Details
+## Reproduce
 
-### Enhanced 3D U-Net
-
-```
-Input (3×128×128×128)
-    ↓
-[Encoder Block 1] → 32 filters + Attention
-    ↓ MaxPool
-[Encoder Block 2] → 64 filters + Attention
-    ↓ MaxPool
-[Encoder Block 3] → 128 filters + Attention
-    ↓ MaxPool
-[Encoder Block 4] → 256 filters + Attention
-    ↓ MaxPool
-[Bottleneck] → 512 filters + Attention
-    ↓
-[Decoder Block 4] ← Skip connection + 256 filters
-    ↓
-[Decoder Block 3] ← Skip connection + 128 filters
-    ↓
-[Decoder Block 2] ← Skip connection + 64 filters
-    ↓
-[Decoder Block 1] ← Skip connection + 32 filters
-    ↓
-Output (2×128×128×128) - Background + Tumor
+```bash
+git clone https://github.com/ahmedfawaz879/AI-Driven-Multi-Modal-Translational-Brain-Mapping-for-Precision-Neurosurgery.git
+cd AI-Driven-Multi-Modal-Translational-Brain-Mapping-for-Precision-Neurosurgery
+pip install -e ".[dev]" && pytest tests/ -v
 ```
 
-**Key Components:**
-- Residual blocks with pre-activation
-- 3D attention mechanisms for feature refinement
-- Instance normalization for protocol robustness
-- Dropout for regularization and uncertainty
+That installs the pinned dependencies and runs the full test suite (model forward-pass shapes, loss computation, crop/pad correctness, config loading, clinical report formatting) against synthetic data - no BraTS download required to verify the code itself works.
 
-##  Training Best Practices
+## Project layout
 
-### Hyperparameter Recommendations
+```
+src/brain_mapping/
+├── config.py        # ModelConfig, TrainingConfig, YAML loader
+├── data.py           # NIfTI I/O, normalization, augmentation, Dataset
+├── models.py         # AttentionBlock3D, ResidualBlock3D, EnhancedUNet3D, CombinedLoss
+├── train.py           # Trainer (AMP, gradient accumulation, early stopping)
+├── explain.py         # UncertaintyEstimator, LayerCAM3D, integrated_gradients
+├── visualize.py        # BrainVisualizer (multi-panel figures, training curves)
+├── connectivity.py      # ConnectivityAnalyzer (ROI time series, graph metrics)
+├── report.py            # ClinicalReportGenerator
+├── inference.py          # InferencePipeline (end-to-end single-case processing)
+├── cli.py                 # parse_args, main - the real entry point
+└── utils.py                # logging setup, set_seed, ensure_dir
 
-| Parameter | Recommended | Notes |
-|-----------|-------------|-------|
-| Batch Size | 2-4 | Limited by GPU memory |
-| Learning Rate | 1e-4 | Use scheduler for adaptation |
-| Epochs | 50-100 | With early stopping |
-| Base Filters | 32 | Balance between capacity and memory |
-| Dropout | 0.1 | Helps with uncertainty estimation |
-| Accumulation Steps | 4 | Effective batch size = 8-16 |
+configs/default.yaml   # externalized ModelConfig/TrainingConfig defaults
+tests/                  # pytest suite, synthetic-data only
+```
 
-### Data Augmentation Settings
+## Citation
 
-```python
-augmentation_config = {
-    'random_flip': {'p': 0.5},
-    'random_rotate': {'p': 0.5, 'max_angle': 15},
-    'random_scale': {'p': 0.5, 'range': (0.9, 1.1)},
-    'random_noise': {'p': 0.3, 'std': 0.05},
-    'random_gamma': {'p': 0.3, 'range': (0.8, 1.2)}
+If you reference this codebase, please cite it as:
+
+```bibtex
+@software{fawaz2026brainmapping,
+  author = {Fawaz, Ahmed},
+  title = {AI-Driven Multi-Modal Translational Brain Mapping for Precision Neurosurgery},
+  year = {2026},
+  url = {https://github.com/ahmedfawaz879/AI-Driven-Multi-Modal-Translational-Brain-Mapping-for-Precision-Neurosurgery}
 }
 ```
 
-### Loss Function Weights
+## License
 
-```python
-loss_weights = {
-    'cross_entropy': 1.0,
-    'dice': 1.0,
-    'focal': 0.5  # Lower weight for focal loss
-}
-```
-
-##  Advanced Configuration
-
-### Custom Model Configuration
-
-```python
-from dataclasses import dataclass
-
-@dataclass
-class ModelConfig:
-    in_channels: int = 3          # T1, T2, FLAIR
-    out_channels: int = 2         # Background, Tumor
-    base_filters: int = 32        # Starting number of filters
-    depth: int = 4                # Number of downsampling layers
-    use_attention: bool = True    # Enable attention blocks
-    use_residual: bool = True     # Enable residual connections
-    dropout: float = 0.1          # Dropout rate
-```
-
-### Training Configuration
-
-```python
-@dataclass
-class TrainingConfig:
-    epochs: int = 50
-    batch_size: int = 2
-    learning_rate: float = 1e-4
-    weight_decay: float = 1e-5
-    patience: int = 10            # Early stopping patience
-    use_amp: bool = True          # Mixed precision training
-    accumulation_steps: int = 4   # Gradient accumulation
-    val_split: float = 0.2        # Validation split
-```
-
-##  Evaluation Metrics
-
-The pipeline computes:
-
-- **Dice Coefficient**: Overlap between prediction and ground truth
-- **IoU (Jaccard Index)**: Intersection over Union
-- **Hausdorff Distance**: Maximum surface distance error
-- **Sensitivity/Specificity**: True positive and negative rates
-- **Volume Error**: Difference in tumor volume estimation
-
-##  Troubleshooting
-
-### Common Issues
-
-**Out of Memory Error**
-```bash
-# Solution 1: Reduce batch size
---batch_size 1
-
-# Solution 2: Use gradient accumulation
---batch_size 1 --accumulation_steps 8
-
-# Solution 3: Reduce model size
---base_filters 16
-```
-
-**Training Diverges**
-```bash
-# Solution: Lower learning rate
---lr 5e-5
-
-# Or use warm-up scheduling
-```
-
-**Poor Segmentation Quality**
-- Ensure proper data normalization
-- Check data augmentation isn't too aggressive
-- Verify ground truth mask quality
-- Train longer with early stopping
-
+MIT - see [LICENSE](LICENSE).
