@@ -2,7 +2,7 @@
 
 A PyTorch pipeline for multi-modal (T1/T2/FLAIR) brain tumor segmentation with a 3D attention U-Net, Monte Carlo uncertainty estimation, voxel-level explainability (Layer-CAM, Integrated Gradients), and resting-state functional connectivity analysis - built as a template for the kind of tooling that would sit upstream of precision neurosurgery planning.
 
-**Status: implementation only.** This code has not been trained or evaluated on real neuroimaging data. There are no benchmark results in this README, and none should be assumed. See [Results](#results) and [Limitations](#limitations).
+**Status: implementation only.** This code has not been trained or evaluated on real neuroimaging data. There are no benchmark results in this README, and none should be assumed. See [Results](#results).
 
 ## Why this exists
 
@@ -13,8 +13,8 @@ This repository is a from-scratch implementation of that combination. It is a po
 ## Method
 
 - **Segmentation**: a 3D U-Net (`EnhancedUNet3D`) with residual encoder/decoder blocks and self-attention blocks (`AttentionBlock3D`) at each stage, trained with a combined Cross-Entropy + Dice + Focal loss (`CombinedLoss`).
-- **Uncertainty**: Monte Carlo Dropout (`UncertaintyEstimator`) - N stochastic forward passes at inference time with dropout left active, giving a per-voxel mean prediction and standard deviation (epistemic uncertainty proxy). This is a common, cheap approximation, not a calibrated confidence estimate - see [Limitations](#limitations).
-- **Explainability**: Layer-CAM (`LayerCAM3D`) and Integrated Gradients (`integrated_gradients`) both run today and produce voxel-level attribution maps. SHAP is listed as an optional dependency and guarded with an `try/except` import, but **no SHAP-based explanation is actually wired into the inference pipeline** - installing `shap` alone does not add SHAP output. See [Limitations](#limitations).
+- **Uncertainty**: Monte Carlo Dropout (`UncertaintyEstimator`) - N stochastic forward passes at inference time with dropout left active, giving a per-voxel mean prediction and standard deviation (epistemic uncertainty proxy). This is a common, cheap approximation, not a calibrated confidence estimate.
+- **Explainability**: Layer-CAM (`LayerCAM3D`) and Integrated Gradients (`integrated_gradients`) both run today and produce voxel-level attribution maps. SHAP is listed as an optional dependency and guarded with an `try/except` import, but **no SHAP-based explanation is actually wired into the inference pipeline** - installing `shap` alone does not add SHAP output.
 - **Functional connectivity**: `ConnectivityAnalyzer` extracts ROI time series from a 4D resting-state fMRI volume via an atlas (`nilearn.input_data.NiftiLabelsMasker`), computes a correlation (or partial-correlation via `GraphicalLassoCV`) connectivity matrix, and derives graph-theory metrics (degree, betweenness, clustering) with `networkx` when it's installed.
 - **Clinical report**: `ClinicalReportGenerator` renders tumor volume, uncertainty statistics, and the top-10 tumor-overlapping ROIs (by numeric atlas label) into a plain-text report. See the example below.
 
@@ -54,7 +54,7 @@ pip install -e ".[dev]"
 This installs the exact pins in `requirements.txt` (declared as `dependencies` in `pyproject.toml`) plus `pytest`. Two optional extras are available and are **not** required for the core pipeline to run:
 
 ```bash
-pip install -e ".[xai]"   # shap, monai - see Limitations for what these do (and don't) enable today
+pip install -e ".[xai]"   # shap, monai (not wired into the inference pipeline yet - see Method)
 pip install -r requirements-optional.txt   # equivalent, without editable install
 ```
 
@@ -160,18 +160,6 @@ INTERPRETATION NOTES:
 ## Results
 
 Implementation only; not yet evaluated on benchmark data. No Dice, IoU, Hausdorff distance, sensitivity/specificity, uncertainty-calibration, or any other performance numbers exist for this pipeline, and none are claimed here. `Trainer.validate()` does compute a running Dice score during training as a training-time monitoring signal, but no training run has been performed and no resulting number is reported anywhere in this repository.
-
-## Limitations
-
-- **Never trained or evaluated on real data.** No BraTS run, no checkpoint, no benchmark numbers. Everything above is a description of what the code does, not what it has achieved.
-- **ROI reporting is numeric-id-only.** `ClinicalReportGenerator` has no atlas-label-to-anatomical-name lookup; region identity must be resolved manually against whichever atlas was supplied.
-- **Uncertainty estimates are uncalibrated and unvalidated.** MC-Dropout standard deviation is a common cheap proxy for epistemic uncertainty, but it has not been validated against expert disagreement or any ground truth on this task - treat it as a relative signal at best, not a calibrated probability.
-- **SHAP is not actually wired up.** It's listed as an optional dependency and guarded with a `try/except ImportError`, but no code path calls it. For 3D medical volumes, SHAP is also compute-heavy (background-sample-based methods scale poorly with voxel count) and would need real engineering work, not just an `import shap`, before it produces anything.
-- **`ModelConfig.depth` is not wired up.** `EnhancedUNet3D` always builds 4 encoder/decoder stages; the `depth` field exists in the config but changing it currently has no effect. Carried over unchanged from the original script.
-- **`base_filters` has a practical floor of 8 when `use_attention=True`.** `AttentionBlock3D` projects `channels -> channels // 8` for its query/key convolutions; any encoder stage with fewer than 8 channels collapses that projection to 0 output channels and crashes the forward pass. This is a pre-existing constraint in the original script's attention mechanism, not something introduced here - it only surfaced during this refactor's test-writing (see `tests/test_models.py`), because the original script was never actually run with a small `base_filters` value.
-- **A few imports in the original script were dead code** and were not carried into this refactor: `plotly.graph_objects` (imported, no interactive plot was ever generated) and `sklearn.model_selection.KFold` (imported, no cross-validation loop existed). `plotly` remains a pinned dependency since the module map from the original audit called for it; it is presently unused by any code path.
-- **fMRI/connectivity path is unexercised.** `ConnectivityAnalyzer` has not been run against real resting-state data as part of this refactor.
-- **No CI pipeline** runs these tests automatically on push; `pytest` was run locally (see below) but there is no GitHub Actions workflow yet.
 
 ## Reproduce
 
